@@ -10,17 +10,18 @@ import {
 import { showMessage } from 'react-native-flash-message'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { getDetail } from '../../api/RestaurantEndpoints'
-
+import { remove as removeProductEndpoint } from '../../api/ProductEndpoints'
 import ImageCard from '../../components/ImageCard'
 import TextRegular from '../../components/TextRegular'
 import TextSemiBold from '../../components/TextSemiBold'
+import DeleteModal from '../../components/DeleteModal'
 import * as GlobalStyles from '../../styles/GlobalStyles'
-
 import defaultProductImage from '../../../assets/product.jpeg'
 import { API_BASE_URL } from '@env'
 
-export default function RestaurantDetailScreen({ navigation, route }) {
+export default function RestaurantDetailScreen ({ navigation, route }) {
   const [restaurant, setRestaurant] = useState({})
+  const [productToBeDeleted, setProductToBeDeleted] = useState(null)
 
   useEffect(() => {
     fetchRestaurantDetail()
@@ -33,9 +34,9 @@ export default function RestaurantDetailScreen({ navigation, route }) {
           source={
             restaurant?.heroImage
               ? {
-                uri: API_BASE_URL + '/' + restaurant.heroImage,
-                cache: 'force-cache'
-              }
+                  uri: API_BASE_URL + '/' + restaurant.heroImage,
+                  cache: 'force-cache'
+                }
               : undefined
           }
           style={styles.imageBackground}
@@ -44,20 +45,23 @@ export default function RestaurantDetailScreen({ navigation, route }) {
             <TextSemiBold textStyle={styles.textTitle}>
               {restaurant.name}
             </TextSemiBold>
+
             <Image
               style={styles.image}
               source={
                 restaurant.logo
                   ? {
-                    uri: API_BASE_URL + '/' + restaurant.logo,
-                    cache: 'force-cache'
-                  }
+                      uri: API_BASE_URL + '/' + restaurant.logo,
+                      cache: 'force-cache'
+                    }
                   : undefined
               }
             />
+
             <TextRegular textStyle={styles.description}>
               {restaurant.description}
             </TextRegular>
+
             <TextRegular textStyle={styles.description}>
               {restaurant.restaurantCategory
                 ? restaurant.restaurantCategory.name
@@ -79,14 +83,10 @@ export default function RestaurantDetailScreen({ navigation, route }) {
             styles.button
           ]}
         >
-          <View
-            style={[
-              { flex: 1, flexDirection: 'row', justifyContent: 'center' }
-            ]}
-          >
+          <View style={styles.buttonContent}>
             <MaterialCommunityIcons
-              name="plus-circle"
-              color={'white'}
+              name='plus-circle'
+              color='white'
               size={20}
             />
             <TextRegular textStyle={styles.text}>Create product</TextRegular>
@@ -107,14 +107,64 @@ export default function RestaurantDetailScreen({ navigation, route }) {
         title={item.name}
       >
         <TextRegular numberOfLines={2}>{item.description}</TextRegular>
+
         <TextSemiBold textStyle={styles.price}>
           {item.price.toFixed(2)}€
         </TextSemiBold>
+
         {!item.availability && (
           <TextRegular textStyle={styles.availability}>
             Not available
           </TextRegular>
         )}
+
+        <View style={styles.actionButtonsContainer}>
+          <Pressable
+            onPress={() =>
+              navigation.navigate('EditProductScreen', { id: item.id })
+            }
+            style={({ pressed }) => [
+              {
+                backgroundColor: pressed
+                  ? GlobalStyles.brandBlueTap
+                  : GlobalStyles.brandBlue
+              },
+              styles.actionButton
+            ]}
+          >
+            <View style={styles.actionButtonContent}>
+              <MaterialCommunityIcons
+                name='pencil'
+                color='white'
+                size={20}
+              />
+              <TextRegular textStyle={styles.text}>Edit</TextRegular>
+            </View>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              setProductToBeDeleted(item)
+            }}
+            style={({ pressed }) => [
+              {
+                backgroundColor: pressed
+                  ? GlobalStyles.brandPrimaryTap
+                  : GlobalStyles.brandPrimary
+              },
+              styles.actionButton
+            ]}
+          >
+            <View style={styles.actionButtonContent}>
+              <MaterialCommunityIcons
+                name='delete'
+                color='white'
+                size={20}
+              />
+              <TextRegular textStyle={styles.text}>Delete</TextRegular>
+            </View>
+          </Pressable>
+        </View>
       </ImageCard>
     )
   }
@@ -141,6 +191,31 @@ export default function RestaurantDetailScreen({ navigation, route }) {
     }
   }
 
+  const removeProduct = async product => {
+    try {
+      await removeProductEndpoint(product.id)
+      await fetchRestaurantDetail()
+      setProductToBeDeleted(null)
+
+      showMessage({
+        message: `Product ${product.name} successfully removed`,
+        type: 'success',
+        style: GlobalStyles.flashStyle,
+        titleStyle: GlobalStyles.flashTextStyle
+      })
+    } catch (error) {
+      console.log(error)
+      setProductToBeDeleted(null)
+
+      showMessage({
+        message: `Product ${product.name} could not be removed.`,
+        type: 'error',
+        style: GlobalStyles.flashStyle,
+        titleStyle: GlobalStyles.flashTextStyle
+      })
+    }
+  }
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -151,6 +226,16 @@ export default function RestaurantDetailScreen({ navigation, route }) {
         renderItem={renderProduct}
         keyExtractor={item => item.id.toString()}
       />
+
+      <DeleteModal
+        isVisible={productToBeDeleted !== null}
+        onCancel={() => setProductToBeDeleted(null)}
+        onConfirm={() => removeProduct(productToBeDeleted)}
+      >
+        <TextRegular>
+          This product will be deleted.
+        </TextRegular>
+      </DeleteModal>
     </View>
   )
 }
@@ -159,11 +244,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1
   },
+
   row: {
     padding: 15,
     marginBottom: 5,
     backgroundColor: GlobalStyles.brandSecondary
   },
+
   restaurantHeaderContainer: {
     height: 250,
     padding: 20,
@@ -171,27 +258,33 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'center'
   },
+
   imageBackground: {
     flex: 1,
     resizeMode: 'cover',
     justifyContent: 'center'
   },
+
   image: {
     height: 100,
     width: 100,
     margin: 10
   },
+
   description: {
     color: 'white'
   },
+
   textTitle: {
     fontSize: 20,
     color: 'white'
   },
+
   emptyList: {
     textAlign: 'center',
     padding: 50
   },
+
   button: {
     borderRadius: 8,
     height: 40,
@@ -201,17 +294,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     width: '80%'
   },
+
+  buttonContent: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+
   text: {
     fontSize: 16,
     color: 'white',
     alignSelf: 'center',
     marginLeft: 5
   },
+
   availability: {
     textAlign: 'right',
     marginRight: 5,
     color: GlobalStyles.brandSecondary
   },
+
+  price: {
+    textAlign: 'right',
+    marginRight: 5
+  },
+
   actionButton: {
     borderRadius: 8,
     height: 40,
@@ -220,12 +328,19 @@ const styles = StyleSheet.create({
     padding: 10,
     alignSelf: 'center',
     flexDirection: 'column',
-    width: '50%'
+    width: '48%'
   },
+
+  actionButtonContent: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+
   actionButtonsContainer: {
     flexDirection: 'row',
-    bottom: 5,
-    position: 'absolute',
-    width: '90%'
+    justifyContent: 'space-between',
+    width: '100%'
   }
 })

@@ -5,7 +5,8 @@ import * as yup from 'yup'
 import DropDownPicker from 'react-native-dropdown-picker'
 import {
   getRestaurantCategories,
-  getDetail
+  getDetail,
+  update
 } from '../../api/RestaurantEndpoints'
 import InputItem from '../../components/InputItem'
 import TextRegular from '../../components/TextRegular'
@@ -23,6 +24,20 @@ export default function EditRestaurantScreen({ navigation, route }) {
   const [open, setOpen] = useState(false)
   const [restaurantCategories, setRestaurantCategories] = useState([])
   const [backendErrors, setBackendErrors] = useState()
+  const [restaurant, setRestaurant] = useState({})
+  const [initialRestaurantValues, setInitialRestaurantValues] = useState({
+    name: null,
+    description: null,
+    address: null,
+    postalCode: null,
+    url: null,
+    shippingCosts: null,
+    email: null,
+    phone: null,
+    restaurantCategoryId: null,
+    logo: null,
+    heroImage: null
+  })
 
   const validationSchema = yup.object().shape({
     name: yup.string().max(255, 'Name too long').required('Name is required'),
@@ -72,10 +87,62 @@ export default function EditRestaurantScreen({ navigation, route }) {
     fetchRestaurantCategories()
   }, [])
 
+  useEffect(() => {
+    async function fetchRestaurantDetail () {
+      try {
+        const fetchedRestaurant = await getDetail(route.params.id)
+        const preparedRestaurant = prepareEntityImages(fetchedRestaurant, [
+          'logo',
+          'heroImage'
+        ])
+
+        setRestaurant(preparedRestaurant)
+
+        const initialValues = buildInitialValues(
+          preparedRestaurant,
+          initialRestaurantValues
+        )
+
+        setInitialRestaurantValues(initialValues)
+      } catch (error) {
+        showMessage({
+          message: `There was an error while retrieving restaurant details (id ${route.params.id}). ${error}`,
+          type: 'error',
+          style: GlobalStyles.flashStyle,
+          titleStyle: GlobalStyles.flashTextStyle
+        })
+      }
+    }
+
+    fetchRestaurantDetail()
+  }, [route])
+
+  const updateRestaurant = async values => {
+    setBackendErrors([])
+
+    try {
+      const updatedRestaurant = await update(restaurant.id, values)
+
+      showMessage({
+        message: `Restaurant ${updatedRestaurant.name} succesfully updated`,
+        type: 'success',
+        style: GlobalStyles.flashStyle,
+        titleStyle: GlobalStyles.flashTextStyle
+      })
+
+      navigation.navigate('RestaurantsScreen', { dirty: true })
+    } catch (error) {
+      console.log(error)
+      setBackendErrors(error.errors)
+    }
+  }
+
   return (
     <Formik
       validationSchema={validationSchema}
-      // include the formik properties here
+      initialValues={initialRestaurantValues}
+      enableReinitialize
+      onSubmit={updateRestaurant}
     >
       {({ handleSubmit, setFieldValue, values }) => (
         <ScrollView>
